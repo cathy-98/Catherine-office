@@ -38,6 +38,11 @@ export function InfoPanel({ activeObject, onClose }: InfoPanelProps) {
             </button>
           </div>
           <p className="text-base leading-7 text-graphite/72">{activeObject.body}</p>
+          {activeObject.futureAction ? (
+            <p className="mt-5 rounded-2xl border border-mauve/15 bg-mauve/10 px-4 py-3 text-sm leading-6 text-plum">
+              {activeObject.futureAction}
+            </p>
+          ) : null}
           <p className="mt-6 border-t border-graphite/10 pt-4 text-xs leading-5 text-graphite/45">
             Placeholder 3D actual: <span className="font-mono">{activeObject.modelPath}</span>. Cuando
             el modelo definitivo esté listo, este objeto puede reemplazarse desde la escena sin cambiar

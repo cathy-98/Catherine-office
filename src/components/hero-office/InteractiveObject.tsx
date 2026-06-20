@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef } from "react";
-import { useFrame } from "@react-three/fiber";
-import { RoundedBox } from "@react-three/drei";
-import type { Group } from "three";
+import { useMemo, useRef } from "react";
+import { useFrame, useLoader } from "@react-three/fiber";
+import { RoundedBox, useGLTF } from "@react-three/drei";
+import { Box3, MeshStandardMaterial, Vector3 } from "three";
+import type { Group, Mesh, Object3D } from "three";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { OfficeObject } from "@/types/office";
 
 type InteractiveObjectProps = {
@@ -27,7 +30,10 @@ export function InteractiveObject({
   useFrame((state) => {
     if (!groupRef.current) return;
     groupRef.current.position.y =
-      object.position[1] + (glow ? Math.sin(state.clock.elapsedTime * 2.2) * 0.025 : 0);
+      object.position[1] + (glow ? 0.045 + Math.sin(state.clock.elapsedTime * 2.2) * 0.025 : 0);
+    const targetScale = (object.scale ?? 1) * (glow ? 1.06 : 1);
+    const nextScale = groupRef.current.scale.x + (targetScale - groupRef.current.scale.x) * 0.18;
+    groupRef.current.scale.setScalar(nextScale);
   });
 
   return (
@@ -35,7 +41,7 @@ export function InteractiveObject({
       ref={groupRef}
       position={object.position}
       rotation={object.rotation}
-      scale={object.scale}
+      scale={object.scale ?? 1}
       onPointerOver={(event) => {
         event.stopPropagation();
         document.body.style.cursor = "pointer";
@@ -51,13 +57,135 @@ export function InteractiveObject({
         onSelect(object);
       }}
     >
-      {/* Replace this switch with <primitive object={gltf.scene} /> after loading object.modelPath. */}
-      <PlaceholderModel kind={object.kind} glow={glow} />
+      {/* Replace remaining placeholders with <primitive object={gltf.scene} /> as final .glb assets arrive. */}
+      {object.kind === "laptop" ? (
+        <MacBookModel glow={glow} />
+      ) : object.kind === "coffee" ? (
+        <CoffeeCupModel glow={glow} />
+      ) : object.kind === "aurora" ? (
+        <AuroraModel modelPath={object.modelPath} glow={glow} />
+      ) : (
+        <PlaceholderModel kind={object.kind} glow={glow} />
+      )}
       {glow ? (
-        <pointLight position={[0, 0.45, 0.2]} intensity={0.9} distance={2.1} color="#b38ad1" />
+        <pointLight position={[0, 0.45, 0.2]} intensity={1.15} distance={2.35} color="#b38ad1" />
       ) : null}
     </group>
   );
+}
+
+function AuroraModel({ modelPath, glow }: { modelPath: string; glow: boolean }) {
+  const gltf = useGLTF(modelPath);
+  const scene = useMemo(() => prepareGroundedModel(gltf.scene), [gltf.scene]);
+
+  return (
+    <group rotation={[0, Math.PI, 0]} scale={1.02}>
+      <primitive object={scene} />
+      {glow ? (
+        <mesh position={[0, 0.34, 0]}>
+          <sphereGeometry args={[0.55, 24, 16]} />
+          <meshBasicMaterial color="#b38ad1" transparent opacity={0.12} depthWrite={false} />
+        </mesh>
+      ) : null}
+    </group>
+  );
+}
+
+function MacBookModel({ glow }: { glow: boolean }) {
+  const materials = useLoader(MTLLoader, "/models/macbook/materials.mtl");
+  const obj = useLoader(OBJLoader, "/models/macbook/model.obj", (loader) => {
+    materials.preload();
+    loader.setMaterials(materials);
+  });
+  const model = useMemo(() => prepareModel(obj), [obj]);
+
+  return (
+    <group position={[0, 0.11, -0.02]} rotation={[0, 0, 0]} scale={0.34}>
+      {/* MacBook OBJ slot. Replace with /models/laptop.glb later if a final optimized GLB is exported. */}
+      <primitive object={model} />
+      {glow ? (
+        <mesh position={[0, 0.9, 0.2]} scale={[1.5, 0.08, 1]}>
+          <sphereGeometry args={[0.7, 24, 16]} />
+          <meshBasicMaterial color="#b38ad1" transparent opacity={0.11} depthWrite={false} />
+        </mesh>
+      ) : null}
+    </group>
+  );
+}
+
+function CoffeeCupModel({ glow }: { glow: boolean }) {
+  const obj = useLoader(OBJLoader, "/models/office-pack/coffee-cup/CHAHIN_COFFEE_CUP.obj");
+  const model = useMemo(() => prepareTintedModel(obj, glow ? "#dcc4ec" : "#c9a8dc"), [obj, glow]);
+
+  return (
+    <group position={[0, 0, 0]} rotation={[0, -0.18, 0]} scale={0.28}>
+      {/* Real coffee cup OBJ from The Office Pack. Replace with /models/coffee.glb later if needed. */}
+      <mesh position={[0, -0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <cylinderGeometry args={[0.36, 0.36, 0.035, 40]} />
+        <meshStandardMaterial color="#f1e7f6" roughness={0.72} />
+      </mesh>
+      <primitive object={model} />
+      <mesh position={[0, 0.42, 0]}>
+        <cylinderGeometry args={[0.2, 0.2, 0.018, 32]} />
+        <meshStandardMaterial color="#b77f56" roughness={0.68} />
+      </mesh>
+      <mesh position={[-0.12, 0.72, 0.03]} rotation={[0.25, 0, -0.25]}>
+        <torusGeometry args={[0.12, 0.006, 8, 26, Math.PI * 0.85]} />
+        <meshBasicMaterial color="#d7c0e6" transparent opacity={0.32} />
+      </mesh>
+      <mesh position={[0.1, 0.82, -0.02]} rotation={[0.2, 0, 0.22]}>
+        <torusGeometry args={[0.1, 0.006, 8, 26, Math.PI * 0.8]} />
+        <meshBasicMaterial color="#d7c0e6" transparent opacity={0.24} />
+      </mesh>
+    </group>
+  );
+}
+
+function prepareModel(scene: Object3D) {
+  const model = scene.clone(true);
+  model.traverse((child) => {
+    child.castShadow = true;
+    child.receiveShadow = true;
+  });
+  return model;
+}
+
+function prepareGroundedModel(scene: Object3D) {
+  const model = scene.clone(true);
+  const box = new Box3().setFromObject(model);
+  const center = new Vector3();
+  box.getCenter(center);
+
+  model.position.set(-center.x, -box.min.y, -center.z);
+  model.traverse((child) => {
+    child.castShadow = true;
+    child.receiveShadow = true;
+  });
+  return model;
+}
+
+function prepareTintedModel(scene: Object3D, color: string) {
+  const model = scene.clone(true);
+  const box = new Box3().setFromObject(model);
+  const center = new Vector3();
+
+  box.getCenter(center);
+  model.position.set(-center.x, -box.min.y, -center.z);
+  model.traverse((child) => {
+    child.castShadow = true;
+    child.receiveShadow = true;
+    if ("isMesh" in child) {
+      const mesh = child as Mesh;
+      mesh.material = new MeshStandardMaterial({
+        color,
+        roughness: 0.58,
+        metalness: 0.04,
+        emissive: color,
+        emissiveIntensity: color === "#ffffff" ? 0 : 0.08,
+      });
+    }
+  });
+  return model;
 }
 
 function PlaceholderModel({ kind, glow }: { kind: OfficeObject["kind"]; glow: boolean }) {
@@ -65,7 +193,7 @@ function PlaceholderModel({ kind, glow }: { kind: OfficeObject["kind"]; glow: bo
     <meshStandardMaterial
       color={glow ? "#f7f1ff" : "#ffffff"}
       emissive={glow ? "#8f6aae" : "#000000"}
-      emissiveIntensity={glow ? 0.16 : 0}
+      emissiveIntensity={glow ? 0.22 : 0}
       roughness={0.58}
       metalness={0.05}
     />
@@ -136,17 +264,24 @@ function PlaceholderModel({ kind, glow }: { kind: OfficeObject["kind"]; glow: bo
 
   if (kind === "camera") {
     return (
-      <group>
-        <RoundedBox args={[0.62, 0.36, 0.3]} radius={0.055} castShadow>
-          <meshStandardMaterial color={glow ? "#eee2f8" : "#d5cec7"} roughness={0.54} />
+      <group rotation={[0, -0.25, 0]}>
+        <RoundedBox args={[0.7, 0.42, 0.26]} radius={0.05} position={[0, 0.08, 0]} castShadow>
+          <meshStandardMaterial color={glow ? "#3b3342" : "#4b4642"} roughness={0.52} />
         </RoundedBox>
-        <mesh position={[0, 0, 0.19]} castShadow>
-          <cylinderGeometry args={[0.16, 0.18, 0.18, 32]} />
-          <meshStandardMaterial color="#746c65" roughness={0.38} />
+        <RoundedBox args={[0.28, 0.12, 0.18]} radius={0.035} position={[-0.19, 0.36, 0]} castShadow>
+          <meshStandardMaterial color="#efe8df" roughness={0.52} />
+        </RoundedBox>
+        <mesh position={[0, 0.08, 0.2]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[0.17, 0.21, 0.18, 36]} />
+          <meshStandardMaterial color="#181614" roughness={0.34} />
         </mesh>
-        <mesh position={[-0.2, 0.23, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.12, 0.22]} />
-          {material}
+        <mesh position={[0, 0.08, 0.305]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.11, 0.11, 0.018, 32]} />
+          <meshStandardMaterial color={glow ? "#b38ad1" : "#2d272d"} roughness={0.2} metalness={0.15} />
+        </mesh>
+        <mesh position={[0.24, 0.32, 0.13]} castShadow>
+          <sphereGeometry args={[0.05, 20, 12]} />
+          <meshStandardMaterial color="#efe8df" roughness={0.42} />
         </mesh>
       </group>
     );
@@ -190,3 +325,5 @@ function PlaceholderModel({ kind, glow }: { kind: OfficeObject["kind"]; glow: bo
     </group>
   );
 }
+
+useGLTF.preload("/models/aurora.glb");

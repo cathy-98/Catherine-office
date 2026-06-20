@@ -21,16 +21,16 @@ export function CameraController({ activeObject }: CameraControllerProps) {
 
   useFrame((state) => {
     const elapsed = state.clock.elapsedTime;
-    const subtleDrift = new Vector3(pointer.x * 0.12, pointer.y * 0.08, 0);
-    const targetPosition = activeObject
-      ? new Vector3(...activeObject.focusPosition)
-      : defaultPosition.clone().add(subtleDrift);
 
-    camera.position.lerp(targetPosition, 0.045);
+    if (activeObject) {
+      camera.position.lerp(new Vector3(...activeObject.focusPosition), 0.045);
+    }
 
     const lookAtTarget = activeObject
       ? new Vector3(...activeObject.position).add(new Vector3(0, 0.45, 0))
-      : defaultTarget.clone().add(new Vector3(Math.sin(elapsed * 0.25) * 0.08, 0, 0));
+      : defaultTarget
+          .clone()
+          .add(new Vector3(pointer.x * 0.08 + Math.sin(elapsed * 0.25) * 0.05, pointer.y * 0.04, 0));
 
     if (controlsRef.current) {
       controlsRef.current.target.lerp(lookAtTarget, 0.06);
@@ -42,11 +42,18 @@ export function CameraController({ activeObject }: CameraControllerProps) {
     <OrbitControls
       ref={controlsRef}
       enablePan={false}
-      enableZoom={false}
+      enableZoom
       enableRotate
-      minPolarAngle={Math.PI / 3.6}
-      maxPolarAngle={Math.PI / 2.15}
-      rotateSpeed={0.22}
+      autoRotate={!activeObject}
+      autoRotateSpeed={0.16}
+      dampingFactor={0.08}
+      enableDamping
+      minDistance={4.8}
+      maxDistance={8.4}
+      minPolarAngle={Math.PI / 3.4}
+      maxPolarAngle={Math.PI / 2.03}
+      rotateSpeed={0.36}
+      zoomSpeed={0.45}
     />
   );
 }

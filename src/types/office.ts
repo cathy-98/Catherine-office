@@ -23,6 +23,7 @@ export type OfficeObject = {
   title: string;
   body: string;
   modelPath: string;
+  futureAction?: string;
   position: VectorTuple;
   rotation?: VectorTuple;
   scale?: number;
