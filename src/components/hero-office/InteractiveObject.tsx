@@ -1,18 +1,20 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
-import { RoundedBox, useGLTF } from "@react-three/drei";
-import { Box3, MeshStandardMaterial, Vector3 } from "three";
-import type { Group, Mesh, Object3D } from "three";
+import { RoundedBox, useAnimations, useGLTF } from "@react-three/drei";
+import { Box3, MeshBasicMaterial, MeshStandardMaterial, Vector3 } from "three";
+import type { AnimationAction, Group, Mesh, Object3D } from "three";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { OfficeObject } from "@/types/office";
 
 type InteractiveObjectProps = {
   object: OfficeObject;
   isActive: boolean;
   isHovered: boolean;
+  isHinted: boolean;
   onHover: (object: OfficeObject | null) => void;
   onSelect: (object: OfficeObject) => void;
 };
@@ -21,11 +23,12 @@ export function InteractiveObject({
   object,
   isActive,
   isHovered,
+  isHinted,
   onHover,
   onSelect,
 }: InteractiveObjectProps) {
   const groupRef = useRef<Group>(null);
-  const glow = isActive || isHovered;
+  const glow = isActive || isHovered || isHinted;
 
   useFrame((state) => {
     if (!groupRef.current) return;
@@ -57,6 +60,7 @@ export function InteractiveObject({
         onSelect(object);
       }}
     >
+      <HotspotMarker glow={glow} isActive={isActive} isHovered={isHovered} isHinted={isHinted} kind={object.kind} />
       {/* Replace remaining placeholders with <primitive object={gltf.scene} /> as final .glb assets arrive. */}
       {object.kind === "laptop" ? (
         <MacBookModel glow={glow} />
@@ -74,16 +78,92 @@ export function InteractiveObject({
   );
 }
 
-function AuroraModel({ modelPath, glow }: { modelPath: string; glow: boolean }) {
-  const gltf = useGLTF(modelPath);
-  const scene = useMemo(() => prepareGroundedModel(gltf.scene), [gltf.scene]);
+function HotspotMarker({
+  glow,
+  isActive,
+  isHovered,
+  isHinted,
+  kind,
+}: {
+  glow: boolean;
+  isActive: boolean;
+  isHovered: boolean;
+  isHinted: boolean;
+  kind: OfficeObject["kind"];
+}) {
+  const ringRef = useRef<Mesh>(null);
+  const dotRef = useRef<Mesh>(null);
+  const radius = kind === "window" ? 0.36 : kind === "aurora" ? 0.28 : kind === "laptop" ? 0.42 : 0.24;
+
+  useFrame((state) => {
+    const pulse = isHinted ? (Math.sin(state.clock.elapsedTime * 6) + 1) / 2 : 0;
+    const ringOpacity = isActive ? 0.42 : isHovered ? 0.34 : isHinted ? 0.18 + pulse * 0.22 : 0.08;
+    const dotOpacity = isActive ? 0.52 : isHovered ? 0.46 : isHinted ? 0.18 + pulse * 0.28 : 0.12;
+
+    if (ringRef.current) {
+      ringRef.current.scale.setScalar(isHinted ? 1 + pulse * 0.16 : 1);
+      (ringRef.current.material as MeshBasicMaterial).opacity = ringOpacity;
+    }
+    if (dotRef.current) {
+      dotRef.current.scale.setScalar(isHinted ? 1 + pulse * 0.1 : 1);
+      (dotRef.current.material as MeshBasicMaterial).opacity = dotOpacity;
+    }
+  });
 
   return (
-    <group rotation={[0, Math.PI, 0]} scale={1.02}>
-      <primitive object={scene} />
+    <group position={[0, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh ref={ringRef}>
+        <ringGeometry args={[radius * 0.72, radius, 48]} />
+        <meshBasicMaterial color="#b38ad1" transparent opacity={glow ? 0.34 : 0.08} depthWrite={false} />
+      </mesh>
+      <mesh ref={dotRef}>
+        <circleGeometry args={[radius * 0.22, 24]} />
+        <meshBasicMaterial color="#f5e8fb" transparent opacity={glow ? 0.48 : 0.12} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function AuroraModel({ modelPath, glow }: { modelPath: string; glow: boolean }) {
+  const groupRef = useRef<Group>(null);
+  const danceRef = useRef<Group>(null);
+  const gltf = useGLTF(modelPath);
+  const hasProceduralDance = modelPath.includes("gangnam");
+  const scene = useMemo(() => prepareGroundedModel(gltf.scene), [gltf.scene]);
+  const { actions } = useAnimations(gltf.animations, groupRef);
+
+  useEffect(() => {
+    const activeActions = Object.values(actions).filter(
+      (action): action is AnimationAction => Boolean(action),
+    );
+
+    activeActions.forEach((action) => {
+      action.reset().fadeIn(0.18).play();
+    });
+
+    return () => {
+      activeActions.forEach((action) => action.fadeOut(0.18));
+    };
+  }, [actions]);
+
+  useFrame((state) => {
+    if (!danceRef.current || !hasProceduralDance) return;
+
+    const time = state.clock.elapsedTime;
+    danceRef.current.position.y = Math.abs(Math.sin(time * 4.5)) * 0.018;
+    danceRef.current.rotation.z = Math.sin(time * 5.2) * 0.045;
+    danceRef.current.rotation.y = Math.sin(time * 2.6) * 0.06;
+  });
+
+  return (
+    <group ref={groupRef} rotation={[0, modelPath.includes("gangnam") ? Math.PI : 0, 0]} scale={1}>
+      {/* Animated GLB slot for Aurora. Keep /models/aurora-coronada.glb replaceable by a final optimized Aurora model later. */}
+      <group ref={danceRef}>
+        <primitive object={scene} />
+      </group>
       {glow ? (
-        <mesh position={[0, 0.34, 0]}>
-          <sphereGeometry args={[0.55, 24, 16]} />
+        <mesh position={[0, 0.26, 0]}>
+          <sphereGeometry args={[0.34, 24, 16]} />
           <meshBasicMaterial color="#b38ad1" transparent opacity={0.12} depthWrite={false} />
         </mesh>
       ) : null}
@@ -103,12 +183,64 @@ function MacBookModel({ glow }: { glow: boolean }) {
     <group position={[0, 0.11, -0.02]} rotation={[0, 0, 0]} scale={0.34}>
       {/* MacBook OBJ slot. Replace with /models/laptop.glb later if a final optimized GLB is exported. */}
       <primitive object={model} />
+      <LaptopScreenInterface glow={glow} />
       {glow ? (
         <mesh position={[0, 0.9, 0.2]} scale={[1.5, 0.08, 1]}>
           <sphereGeometry args={[0.7, 24, 16]} />
           <meshBasicMaterial color="#b38ad1" transparent opacity={0.11} depthWrite={false} />
         </mesh>
       ) : null}
+    </group>
+  );
+}
+
+function LaptopScreenInterface({ glow }: { glow: boolean }) {
+  return (
+    <group position={[0, 0.84, -0.645]} rotation={[0, 0, 0]}>
+      <mesh>
+        <planeGeometry args={[1.82, 0.94]} />
+        <meshBasicMaterial color="#f8f3ef" transparent opacity={0.92} depthWrite={false} />
+      </mesh>
+      <mesh position={[-0.55, 0.24, 0.006]}>
+        <planeGeometry args={[0.45, 0.07]} />
+        <meshBasicMaterial color="#8f6aae" transparent opacity={0.86} depthWrite={false} />
+      </mesh>
+      <mesh position={[-0.55, 0.11, 0.007]}>
+        <planeGeometry args={[0.62, 0.03]} />
+        <meshBasicMaterial color="#cbb8dc" transparent opacity={0.72} depthWrite={false} />
+      </mesh>
+      <mesh position={[-0.55, 0.035, 0.007]}>
+        <planeGeometry args={[0.42, 0.03]} />
+        <meshBasicMaterial color="#e2d5ea" transparent opacity={0.78} depthWrite={false} />
+      </mesh>
+      {[-0.36, 0, 0.36].map((offset, index) => (
+        <group
+          // eslint-disable-next-line react/no-array-index-key
+          key={index}
+          position={[offset * 0.82 + 0.36, -0.16, 0.008]}
+        >
+          <mesh>
+            <planeGeometry args={[0.24, 0.22]} />
+            <meshBasicMaterial color={index === 1 ? "#efe4f7" : "#ffffff"} transparent opacity={0.96} depthWrite={false} />
+          </mesh>
+          <mesh position={[0, 0.07, 0.004]}>
+            <planeGeometry args={[0.14, 0.03]} />
+            <meshBasicMaterial color={index === 2 ? "#8f6aae" : "#c8a7da"} transparent opacity={0.82} depthWrite={false} />
+          </mesh>
+          <mesh position={[0, -0.03, 0.004]}>
+            <planeGeometry args={[0.15, 0.018]} />
+            <meshBasicMaterial color="#d8c7e6" transparent opacity={0.74} depthWrite={false} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0.54, 0.23, 0.009]}>
+        <circleGeometry args={[0.105, 32]} />
+        <meshBasicMaterial color="#d8c7e6" transparent opacity={0.86} depthWrite={false} />
+      </mesh>
+      <mesh position={[0.55, -0.36, 0.009]}>
+        <planeGeometry args={[0.38, 0.095]} />
+        <meshBasicMaterial color={glow ? "#8f6aae" : "#b38ad1"} transparent opacity={0.9} depthWrite={false} />
+      </mesh>
     </group>
   );
 }
@@ -151,7 +283,7 @@ function prepareModel(scene: Object3D) {
 }
 
 function prepareGroundedModel(scene: Object3D) {
-  const model = scene.clone(true);
+  const model = cloneSkeleton(scene);
   const box = new Box3().setFromObject(model);
   const center = new Vector3();
   box.getCenter(center);
@@ -326,4 +458,4 @@ function PlaceholderModel({ kind, glow }: { kind: OfficeObject["kind"]; glow: bo
   );
 }
 
-useGLTF.preload("/models/aurora.glb");
+useGLTF.preload("/models/aurora-coronada.glb");

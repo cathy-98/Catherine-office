@@ -5,10 +5,12 @@ This folder is ready for final `.glb` assets. Current scene objects are geometry
 Expected future files:
 
 - `office.glb`
+- `oficina-reference.glb` temporary CC BY room base downloaded from Sketchfab: `Oficina` by `maralflop1`. It is retinted in code and should be credited if kept in production.
 - `laptop.glb`
 - `macbook/model.obj` currently loaded from `Laptop - MacBook Pro/model.obj` with `materials.mtl`
 - `coffee.glb`
-- `aurora.glb` currently loaded from `Tubbs the cat.glb`
+- `aurora-coronada.glb` currently loaded from `gato_coronado.glb`
+- `aurora-gangnam.glb` kept as an unused alternate experiment from `el_gato_gangnam_style.glb`
 - `camera.glb`
 - `window.glb`
 - `notebook.glb`

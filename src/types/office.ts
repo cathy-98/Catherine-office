@@ -4,7 +4,9 @@ export type OfficeObjectId =
   | "beyond"
   | "visual"
   | "timeline"
-  | "process";
+  | "process"
+  | "skills"
+  | "cv";
 
 export type OfficeObjectKind =
   | "laptop"
@@ -12,7 +14,9 @@ export type OfficeObjectKind =
   | "aurora"
   | "camera"
   | "window"
-  | "notebook";
+  | "notebook"
+  | "moodboard"
+  | "folder";
 
 export type VectorTuple = [number, number, number];
 
@@ -21,6 +25,7 @@ export type OfficeObject = {
   kind: OfficeObjectKind;
   label: string;
   title: string;
+  tooltipLabel?: string;
   body: string;
   modelPath: string;
   futureAction?: string;
